@@ -5,6 +5,9 @@
     Description: JavaScript file for the Film Scanner app, responsible for accessing the
                  device's camera, displaying the live video feed, and capturing high-quality images 
                  for further processing.
+
+                 11/18/24 Updated interface
+
 */
 
 // Select HTML elements: video, canvas, and capture button

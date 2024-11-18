@@ -7,6 +7,17 @@
                  displaying the captured image.
 -->
 
+<!-- 
+    Project: 35mm Film Scanner Progressive Web App
+    Author: Robert Wilcox
+    Course: EE 513
+    Description: Main HTML file for the Film Scanner app, containing the structure of the
+                 web application, including video feed, capture button, and canvas for
+                 displaying the captured image.
+
+                 11/18/24 Updated interface
+-->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -33,11 +44,8 @@
             <video id="camera" autoplay></video>
         </div>
         
-        <!-- Button to capture an image from the video feed -->
-        <button id="capture-btn">Capture High-Quality Image</button>
-        
-        <!-- Canvas to display the captured image, hidden initially -->
-        <canvas id="canvas" style="display: none;"></canvas>
+        <!-- Circular capture button -->
+        <button id="capture-btn" aria-label="Capture"></button>
     </main>
 
     <!-- Link to external JavaScript file that handles camera access and image capture -->

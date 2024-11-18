@@ -1,0 +1,75 @@
+/* 
+    Project: 35mm Film Scanner Progressive Web App
+    Author: Robert Wilcox
+    Course: EE 513
+    Description: External stylesheet for the Film Scanner app, providing layout and styling 
+                 for the main elements, including camera container, video feed, and capture button.
+
+                 11/18/24 Responsive and improved styles for the Film Scanner app.
+*/
+
+/* Base styling for all devices */
+
+/* Reset margins and paddings for full control */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Full viewport setup */
+html, body {
+    width: 100vw; /* Full viewport width */
+    height: 100vh; /* Full viewport height */
+    overflow: hidden; /* Prevent scrolling */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #000; /* Black background */
+}
+
+/* Camera container perfectly fills the window */
+.camera-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw; /* Full width of the viewport */
+    height: 100vh; /* Full height of the viewport */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #000; /* Black background for any empty space */
+    overflow: hidden; /* Prevent overflow of content */
+}
+
+/* Scale the video to fit the screen while maintaining aspect ratio */
+#camera {
+    width: 100vw; /* Fit width */
+    height: auto; /* Scale height automatically */
+    background: #000; /* Ensure black background on any unused space */
+}
+
+#camera:portrait {
+    width: auto;
+    height: 100vh; /* Fit height in portrait mode */
+}
+
+/* Circular capture button */
+button {
+    position: absolute;
+    bottom: 30px; /* Position at the bottom of the viewport */
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    border: none;
+    background-color: #ff3b30; /* Bright red for visibility */
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); /* Button shadow */
+}
+
+button:hover {
+    background-color: #e53935;
+}
