@@ -1,0 +1,46 @@
+<!-- 
+    Project: 35mm Film Scanner Progressive Web App
+    Author: Robert Wilcox
+    Course: EE 513
+    Description: Main HTML file for the Film Scanner app, containing the structure of the
+                 web application, including video feed, capture button, and canvas for
+                 displaying the captured image.
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Meta information for character encoding and responsive design -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Title of the web application -->
+    <title>Film Scanner App</title>
+    
+    <!-- Link to external stylesheet for app styling -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Header section displaying the title of the app -->
+    <header>
+        <h1>35mm Film Scanner</h1>
+    </header>
+
+    <!-- Main content area of the app -->
+    <main>
+        <!-- Video element to display the live camera feed -->
+        <div class="camera-container">
+            <video id="camera" autoplay></video>
+        </div>
+        
+        <!-- Button to capture an image from the video feed -->
+        <button id="capture-btn">Capture High-Quality Image</button>
+        
+        <!-- Canvas to display the captured image, hidden initially -->
+        <canvas id="canvas" style="display: none;"></canvas>
+    </main>
+
+    <!-- Link to external JavaScript file that handles camera access and image capture -->
+    <script src="js/script.js"></script>
+</body>
+</html>
