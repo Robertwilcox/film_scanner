@@ -2,74 +2,105 @@
     Project: 35mm Film Scanner Progressive Web App
     Author: Robert Wilcox
     Course: EE 513
-    Description: External stylesheet for the Film Scanner app, providing layout and styling 
-                 for the main elements, including camera container, video feed, and capture button.
-
-                 11/18/24 Responsive and improved styles for the Film Scanner app.
+    Description: Styles for folder management, folder contents, and scanning interfaces.
 */
 
-/* Base styling for all devices */
-
-/* Reset margins and paddings for full control */
-* {
+/* General styling */
+body {
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
-}
-
-/* Full viewport setup */
-html, body {
-    width: 100vw; /* Full viewport width */
-    height: 100vh; /* Full viewport height */
-    overflow: hidden; /* Prevent scrolling */
+    font-family: Arial, sans-serif;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
     align-items: center;
-    background-color: #000; /* Black background */
+    background-color: #f8f9fa;
 }
 
-/* Camera container perfectly fills the window */
-.camera-container {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100vw; /* Full width of the viewport */
-    height: 100vh; /* Full height of the viewport */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: #000; /* Black background for any empty space */
-    overflow: hidden; /* Prevent overflow of content */
-}
-
-/* Scale the video to fit the screen while maintaining aspect ratio */
-#camera {
-    width: 100vw; /* Fit width */
-    height: auto; /* Scale height automatically */
-    background: #000; /* Ensure black background on any unused space */
-}
-
-#camera:portrait {
-    width: auto;
-    height: 100vh; /* Fit height in portrait mode */
-}
-
-/* Circular capture button */
-button {
-    position: absolute;
-    bottom: 30px; /* Position at the bottom of the viewport */
-    width: 70px;
-    height: 70px;
-    border-radius: 50%;
-    border: none;
-    background-color: #ff3b30; /* Bright red for visibility */
+/* Header styling */
+header {
+    background-color: #333;
     color: white;
-    font-size: 18px;
-    font-weight: bold;
+    width: 100%;
+    padding: 10px 0;
+    text-align: center;
+}
+
+/* Folder view styling */
+#folder-list, #folder-images {
+    margin: 20px 0;
+    width: 90%;
+    max-width: 600px;
+    background: #fff;
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+#no-folders-msg {
+    text-align: center;
+    color: #666;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+}
+
+li {
+    padding: 8px;
+    margin: 5px 0;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background-color: #f4f4f4;
     cursor: pointer;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); /* Button shadow */
+}
+
+li:hover {
+    background-color: #eaeaea;
+}
+
+/* Image thumbnails */
+.folder-image {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    margin: 5px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+/* Camera container */
+.camera-container {
+    position: relative;
+    width: 100%;
+    max-width: 600px;
+    height: 400px;
+    background-color: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+/* Video feed styling */
+#camera {
+    width: auto;
+    height: 100%;
+}
+
+/* Buttons */
+button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 18px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
 }
 
 button:hover {
-    background-color: #e53935;
+    background-color: #0056b3;
 }

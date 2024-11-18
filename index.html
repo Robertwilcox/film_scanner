@@ -2,53 +2,49 @@
     Project: 35mm Film Scanner Progressive Web App
     Author: Robert Wilcox
     Course: EE 513
-    Description: Main HTML file for the Film Scanner app, containing the structure of the
-                 web application, including video feed, capture button, and canvas for
-                 displaying the captured image.
--->
-
-<!-- 
-    Project: 35mm Film Scanner Progressive Web App
-    Author: Robert Wilcox
-    Course: EE 513
-    Description: Main HTML file for the Film Scanner app, containing the structure of the
-                 web application, including video feed, capture button, and canvas for
-                 displaying the captured image.
-
-                 11/18/24 Updated interface
+    Description: Main HTML file with views for folder management, folder contents, and scanning.
 -->
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Meta information for character encoding and responsive design -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <!-- Title of the web application -->
-    <title>Film Scanner App</title>
-    
-    <!-- Link to external stylesheet for app styling -->
+    <title>Simple Film Scanner</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-    <!-- Header section displaying the title of the app -->
     <header>
-        <h1>35mm Film Scanner</h1>
+        <h1>Simple Film Scanner</h1>
     </header>
 
-    <!-- Main content area of the app -->
-    <main>
-        <!-- Video element to display the live camera feed -->
-        <div class="camera-container">
-            <video id="camera" autoplay></video>
-        </div>
-        
-        <!-- Circular capture button -->
-        <button id="capture-btn" aria-label="Capture"></button>
+    <!-- Folder view -->
+    <main id="folder-view">
+        <section id="folder-list">
+            <p id="no-folders-msg">No scanned images yet.</p>
+            <ul id="folders"></ul>
+        </section>
+        <button id="scan-btn">Create Folder / Scan Film</button>
     </main>
 
-    <!-- Link to external JavaScript file that handles camera access and image capture -->
+    <!-- Folder contents view (hidden initially) -->
+    <main id="folder-contents-view" style="display: none;">
+        <h2 id="current-folder-name"></h2>
+        <section id="folder-images"></section>
+        <button id="start-scan-btn">Start Scanning</button>
+        <button id="back-to-menu-btn-contents">Back to Main Menu</button>
+    </main>
+
+    <!-- Scanning view (hidden initially) -->
+    <main id="scanning-view" style="display: none;">
+        <div class="camera-container">
+            <video id="camera" autoplay></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+        </div>
+        <button id="capture-btn">Capture</button>
+        <button id="back-to-menu-btn-scan">Back to Main Menu</button>
+    </main>
+
     <script src="js/script.js"></script>
 </body>
 </html>
