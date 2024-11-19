@@ -1,49 +1,46 @@
-<!-- 
-    Project: 35mm Film Scanner Progressive Web App
-    Author: Robert Wilcox
-    Course: EE 513
-    Description: Main HTML file with views for folder management, folder contents, and scanning.
--->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Film Scanner</title>
+    <title>35mm Film Scanner</title>
     <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
-    <header>
-        <h1>Simple Film Scanner</h1>
-    </header>
+    <!-- Main Folder View -->
+    <div id="folder-view">
+        <h1>35mm Film Scanner</h1>
+        <ul id="folder-list"></ul>
+        <button id="scan-btn">Select/Create Folder</button>
+    </div>
 
-    <!-- Folder view -->
-    <main id="folder-view">
-        <section id="folder-list">
-            <p id="no-folders-msg">No scanned images yet.</p>
-            <ul id="folders"></ul>
-        </section>
-        <button id="scan-btn">Create Folder / Scan Film</button>
-    </main>
-
-    <!-- Folder contents view (hidden initially) -->
-    <main id="folder-contents-view" style="display: none;">
+    <!-- Folder Contents View -->
+    <div id="folder-contents-view" style="display: none;">
         <h2 id="current-folder-name"></h2>
-        <section id="folder-images"></section>
+        <div id="folder-images"></div>
         <button id="start-scan-btn">Start Scanning</button>
+        <button id="upload-image-btn">Upload Image</button>
+        <input type="file" id="image-upload-input" accept="image/*" style="display: none;">
+        <button id="download-all-btn">Download All</button>
         <button id="back-to-menu-btn-contents">Back to Main Menu</button>
-    </main>
+    </div>
 
-    <!-- Scanning view (hidden initially) -->
-    <main id="scanning-view" style="display: none;">
-        <div class="camera-container">
-            <video id="camera" autoplay></video>
-            <canvas id="canvas" style="display: none;"></canvas>
-        </div>
-        <button id="capture-btn">Capture</button>
-        <button id="back-to-menu-btn-scan">Back to Main Menu</button>
-    </main>
+    <!-- Scanning View -->
+    <div id="scanning-view" style="display: none;">
+        <video id="camera" autoplay></video>
+        <canvas id="canvas" style="display: none;"></canvas>
+        <button id="capture-btn"></button>
+        <button id="back-to-menu-btn-scan">
+            <img src="icons/home_icon.png" alt="Home">
+        </button>
+    </div>
+
+    <!-- Image Modal -->
+    <div id="image-modal" style="display: none;">
+        <img id="modal-image" alt="Captured Image">
+        <button id="close-modal">X</button>
+    </div>
 
     <script src="js/script.js"></script>
 </body>

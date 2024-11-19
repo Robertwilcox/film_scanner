@@ -1,72 +1,294 @@
 /*
+    script.js
     Project: 35mm Film Scanner Progressive Web App
     Author: Robert Wilcox
-    Course: EE 513
-    Description: Handles folder management, viewing folder contents, image capture, and saving images to the local file system using File System Access API.
+    Description: JavaScript for managing folder creation, image capture, image uploading,
+                 and downloading. Includes IndexedDB integration for persistence and 
+                 support for camera scanning and device uploads.
 */
 
 // UI Elements
 const folderView = document.getElementById('folder-view');
 const folderContentsView = document.getElementById('folder-contents-view');
 const scanningView = document.getElementById('scanning-view');
-const folderList = document.getElementById('folders');
+const folderList = document.getElementById('folder-list');
 const folderImages = document.getElementById('folder-images');
-const noFoldersMsg = document.getElementById('no-folders-msg');
 const scanBtn = document.getElementById('scan-btn');
 const startScanBtn = document.getElementById('start-scan-btn');
+const captureBtn = document.getElementById('capture-btn');
+const currentFolderName = document.getElementById('current-folder-name');
 const backToMenuBtnContents = document.getElementById('back-to-menu-btn-contents');
 const backToMenuBtnScan = document.getElementById('back-to-menu-btn-scan');
-const currentFolderName = document.getElementById('current-folder-name');
 const camera = document.getElementById('camera');
 const canvas = document.getElementById('canvas');
-const captureBtn = document.getElementById('capture-btn');
+const imageModal = document.getElementById('image-modal');
+const modalImage = document.getElementById('modal-image');
+const closeModal = document.getElementById('close-modal');
+const downloadAllBtn = document.getElementById('download-all-btn');
 
-let folderHandle = null; // Store user's selected folder
+// New UI Elements for Image Upload
+const uploadImageBtn = document.getElementById('upload-image-btn');
+const imageUploadInput = document.getElementById('image-upload-input');
 
-// Update the folder view
-function updateFolderView() {
-    if (folderHandle) {
-        noFoldersMsg.style.display = 'none';
-        folderList.innerHTML = ''; // Clear any previous list
+let imagesDB = null; // IndexedDB instance
+let activeFolder = ''; // Current folder selected
 
-        const li = document.createElement('li');
-        li.textContent = `Selected Folder: ${folderHandle.name}`;
-        li.addEventListener('click', listImages); // View folder contents
-        folderList.appendChild(li);
-    } else {
-        noFoldersMsg.style.display = 'block';
-    }
+// Initialize IndexedDB
+function initIndexedDB() {
+    const request = indexedDB.open('FilmScannerDB', 1);
+
+    request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains('images')) {
+            db.createObjectStore('images', { keyPath: 'id', autoIncrement: true });
+            console.log('Object store "images" created.');
+        }
+    };
+
+    request.onsuccess = (event) => {
+        imagesDB = event.target.result;
+        console.log('IndexedDB initialized successfully.');
+
+        // Clear all data on app startup
+        clearIndexedDB();
+    };
+
+    request.onerror = (event) => {
+        console.error('IndexedDB initialization failed:', event.target.error);
+    };
 }
 
-// Return to the main menu
-function returnToMainMenu() {
-    folderView.style.display = 'flex';
-    folderContentsView.style.display = 'none';
-    scanningView.style.display = 'none';
-
-    // Stop the camera if active
-    const stream = camera.srcObject;
-    if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-        camera.srcObject = null;
-    }
-
-    updateFolderView(); // Ensure the UI is updated
-}
-
-// Start scanning
-function startScanning() {
-    if (!folderHandle) {
-        alert('Please select a folder first!');
+// Clear all data from IndexedDB
+function clearIndexedDB() {
+    if (!imagesDB) {
+        console.error('Cannot clear: IndexedDB is not initialized.');
         return;
     }
 
+    const transaction = imagesDB.transaction('images', 'readwrite');
+    const store = transaction.objectStore('images');
+    const clearRequest = store.clear();
+
+    clearRequest.onsuccess = () => {
+        console.log('All data cleared from IndexedDB.');
+        updateFolderList([]); // Clear folder list in UI
+    };
+
+    clearRequest.onerror = (event) => {
+        console.error('Error clearing IndexedDB:', event.target.error);
+    };
+}
+
+// Save image to IndexedDB
+function saveToIndexedDB(imageBlob, fileName) {
+    if (!imagesDB) {
+        console.error('Cannot save: IndexedDB is not initialized.');
+        return;
+    }
+
+    const transaction = imagesDB.transaction('images', 'readwrite');
+    const store = transaction.objectStore('images');
+    store.add({ name: fileName, blob: imageBlob, folder: activeFolder });
+
+    transaction.oncomplete = () => {
+        console.log(`Image saved: ${fileName}`);
+        retrieveFromIndexedDB(); // Update folder contents
+    };
+
+    transaction.onerror = (event) => {
+        console.error('Error saving to IndexedDB:', event.target.error);
+        alert('Failed to save image. Please try again.');
+    };
+}
+
+// Retrieve images and folders from IndexedDB
+function retrieveFromIndexedDB() {
+    if (!imagesDB) {
+        console.error('Cannot retrieve images: IndexedDB is not initialized.');
+        return;
+    }
+
+    const transaction = imagesDB.transaction('images', 'readonly');
+    const store = transaction.objectStore('images');
+    const request = store.getAll();
+
+    request.onsuccess = (event) => {
+        const images = event.target.result;
+        console.log('Images retrieved:', images);
+
+        const folderMap = images.reduce((map, image) => {
+            if (!map[image.folder]) {
+                map[image.folder] = [];
+            }
+            map[image.folder].push(image);
+            return map;
+        }, {});
+
+        updateFolderList(Object.entries(folderMap));
+
+        if (activeFolder) {
+            displayFolderContents(folderMap[activeFolder] || []);
+        }
+    };
+
+    request.onerror = (event) => {
+        console.error('Error retrieving from IndexedDB:', event.target.error);
+    };
+}
+
+// Update folder list in UI
+function updateFolderList(folders) {
+    folderList.innerHTML = '';
+
+    folders.forEach(([folderName, images]) => {
+        const listItem = document.createElement('li');
+        listItem.textContent = `${folderName} (${images.length} images)`;
+        listItem.addEventListener('click', () => {
+            activeFolder = folderName;
+            currentFolderName.textContent = `Folder: ${folderName}`;
+            folderView.style.display = 'none';
+            folderContentsView.style.display = 'flex';
+            displayFolderContents(images);
+        });
+        folderList.appendChild(listItem);
+    });
+}
+
+// Display folder contents
+function displayFolderContents(images) {
+    folderImages.innerHTML = '';
+
+    images.forEach((image) => {
+        if (!(image.blob instanceof Blob)) {
+            console.error('Invalid blob detected. Skipping image:', image);
+            return;
+        }
+
+        const imageUrl = URL.createObjectURL(image.blob);
+
+        const img = document.createElement('img');
+        img.src = imageUrl;
+        img.classList.add('folder-image');
+        img.addEventListener('click', () => openImageModal(imageUrl));
+        folderImages.appendChild(img);
+    });
+}
+
+// Open image in modal viewer
+function openImageModal(imageUrl) {
+    modalImage.src = imageUrl;
+    imageModal.style.display = 'flex';
+}
+
+// Close the modal viewer
+closeModal.addEventListener('click', () => {
+    imageModal.style.display = 'none';
+});
+
+// Select or create a folder
+scanBtn.addEventListener('click', () => {
+    const folderName = prompt('Enter a folder name (existing or new):');
+    if (folderName) {
+        activeFolder = folderName;
+        currentFolderName.textContent = `Folder: ${folderName}`;
+        folderView.style.display = 'none';
+        folderContentsView.style.display = 'flex';
+        retrieveFromIndexedDB();
+    } else {
+        alert('No folder name entered. Please try again.');
+    }
+});
+
+// Download all images in the folder as a zip
+downloadAllBtn.addEventListener('click', () => {
+    if (!imagesDB) {
+        console.error('Cannot download: IndexedDB is not initialized.');
+        return;
+    }
+
+    const transaction = imagesDB.transaction('images', 'readonly');
+    const store = transaction.objectStore('images');
+    const request = store.getAll();
+
+    request.onsuccess = (event) => {
+        const images = event.target.result.filter((image) => image.folder === activeFolder);
+
+        if (images.length === 0) {
+            alert('No images to download!');
+            return;
+        }
+
+        const zip = new JSZip();
+        images.forEach((image) => {
+            zip.file(image.name, image.blob);
+        });
+
+        zip.generateAsync({ type: 'blob' }).then((content) => {
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content);
+            link.download = `${activeFolder}.zip`;
+            link.click();
+            alert('Folder downloaded as zip!');
+        });
+    };
+
+    request.onerror = (event) => {
+        console.error('Error retrieving images for download:', event.target.error);
+    };
+});
+
+// Handle image uploads
+uploadImageBtn.addEventListener('click', () => {
+    imageUploadInput.click();
+});
+
+imageUploadInput.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+
+    if (!file) {
+        alert('No file selected. Please choose an image.');
+        return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+        const imageBlob = new Blob([e.target.result], { type: file.type });
+        const fileName = file.name;
+
+        // Save the image to IndexedDB
+        saveToIndexedDB(imageBlob, fileName);
+    };
+
+    reader.onerror = (err) => {
+        console.error('Error reading file:', err);
+        alert('Failed to read file. Please try again.');
+    };
+
+    reader.readAsArrayBuffer(file); // Read the file as an ArrayBuffer
+});
+
+// Return to the main menu
+backToMenuBtnContents.addEventListener('click', () => {
+    folderContentsView.style.display = 'none';
+    folderView.style.display = 'flex';
+    retrieveFromIndexedDB();
+});
+
+backToMenuBtnScan.addEventListener('click', () => {
+    scanningView.style.display = 'none';
+    folderView.style.display = 'flex';
+    retrieveFromIndexedDB();
+});
+
+// Start scanning
+startScanBtn.addEventListener('click', () => {
     folderContentsView.style.display = 'none';
     scanningView.style.display = 'flex';
     startCamera();
-}
+});
 
-// Start the camera
+// Start camera with tap-to-focus capabilities
 async function startCamera() {
     try {
         const constraints = {
@@ -78,105 +300,77 @@ async function startCamera() {
         };
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         camera.srcObject = stream;
+
+        // Enable tap-to-focus
+        setupTapToFocus(camera);
     } catch (error) {
-        console.error('Error accessing the camera:', error);
+        console.error('Error starting camera:', error);
+        alert('Failed to access the camera.');
     }
 }
 
-// Notify the user of a successful capture
-function showCaptureNotification() {
-    const notification = document.createElement('div');
-    notification.textContent = 'Capture Successful!';
-    notification.style.position = 'fixed';
-    notification.style.bottom = '20px';
-    notification.style.left = '50%';
-    notification.style.transform = 'translateX(-50%)';
-    notification.style.backgroundColor = '#28a745';
-    notification.style.color = '#fff';
-    notification.style.padding = '10px 20px';
-    notification.style.borderRadius = '5px';
-    notification.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.2)';
-    notification.style.zIndex = '1000';
-    notification.style.fontSize = '16px';
+// Tap-to-Focus Using Built-In Autofocus
+function setupTapToFocus(videoElement) {
+    videoElement.addEventListener('touchstart', async (event) => {
+        if (videoElement.srcObject && videoElement.srcObject.getVideoTracks) {
+            const [track] = videoElement.srcObject.getVideoTracks();
 
-    document.body.appendChild(notification);
+            // Check if autofocus is supported
+            if (!track.getCapabilities || !track.applyConstraints) {
+                console.error('Manual focus is not supported on this device/browser.');
+                return;
+            }
 
-    setTimeout(() => {
-        notification.remove();
-    }, 3000);
+            const capabilities = track.getCapabilities();
+            if (!capabilities.focusMode || !capabilities.focusMode.includes('auto')) {
+                console.error('Autofocus is not supported on this camera.');
+                return;
+            }
+
+            console.log('Triggering autofocus...');
+
+            try {
+                // Set focus mode to 'auto' to trigger autofocus
+                await track.applyConstraints({
+                    advanced: [{ focusMode: 'auto' }],
+                });
+
+                console.log('Autofocus triggered successfully.');
+
+                // Optionally reset focus mode to 'continuous' after a short delay
+                setTimeout(async () => {
+                    if (capabilities.focusMode.includes('continuous')) {
+                        await track.applyConstraints({
+                            advanced: [{ focusMode: 'continuous' }],
+                        });
+                        console.log('Focus mode reset to continuous.');
+                    }
+                }, 2000); // Adjust delay as needed
+            } catch (err) {
+                console.error('Error triggering autofocus:', err);
+            }
+        } else {
+            console.error('No video track available for autofocus.');
+        }
+    });
 }
 
-// Select a folder to save images
-scanBtn.addEventListener('click', async () => {
-    try {
-        folderHandle = await window.showDirectoryPicker(); // Ask user to select a folder
-        alert('Folder selected! You can now scan and save images.');
-        updateFolderView(); // Update UI to reflect folder selection
-    } catch (error) {
-        console.error('Folder selection canceled:', error);
-    }
-});
-
-// Capture and save an image
-captureBtn.addEventListener('click', async () => {
-    if (!folderHandle) {
-        alert('Please select a folder first!');
-        return;
-    }
-
-    // Capture the image from the camera
+// Capture image
+captureBtn.addEventListener('click', () => {
+    const context = canvas.getContext('2d');
     canvas.width = camera.videoWidth;
     canvas.height = camera.videoHeight;
-    const context = canvas.getContext('2d');
     context.drawImage(camera, 0, 0, canvas.width, canvas.height);
 
-    // Convert the image to a Blob
-    const imageBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
-    const timestamp = Date.now();
-    const fileName = `Image_${timestamp}.png`;
-
-    // Save the image as a file in the selected folder
-    try {
-        const fileHandle = await folderHandle.getFileHandle(fileName, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(imageBlob);
-        await writable.close();
-        alert(`Image saved as ${fileName}`);
-        showCaptureNotification();
-    } catch (error) {
-        console.error('Error saving image:', error);
-    }
+    canvas.toBlob((blob) => {
+        const fileName = `Image_${Date.now()}.png`;
+        saveToIndexedDB(blob, fileName);
+        alert('Image captured and saved!');
+    }, 'image/png');
 });
 
-// List images in the selected folder
-async function listImages() {
-    if (!folderHandle) {
-        alert('Please select a folder first!');
-        return;
-    }
-
-    folderContentsView.style.display = 'flex';
-    folderView.style.display = 'none';
-
-    folderImages.innerHTML = ''; // Clear previous images
-
-    for await (const [name, handle] of folderHandle.entries()) {
-        if (handle.kind === 'file') {
-            const file = await handle.getFile();
-            const imageUrl = URL.createObjectURL(file);
-
-            const img = document.createElement('img');
-            img.src = imageUrl;
-            img.classList.add('folder-image');
-            folderImages.appendChild(img);
-        }
-    }
-}
-
-// Button events
-startScanBtn.addEventListener('click', startScanning);
-backToMenuBtnContents.addEventListener('click', returnToMainMenu);
-backToMenuBtnScan.addEventListener('click', returnToMainMenu);
-
-// Initial setup
-returnToMainMenu();
+// Initialize the app
+document.addEventListener('DOMContentLoaded', () => {
+    folderView.style.display = 'flex'; // Show folder view on load
+    initIndexedDB(); // Initialize IndexedDB
+});
