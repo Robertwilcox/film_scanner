@@ -196,3 +196,19 @@ button:hover {
     width: 32px;
     height: 32px;
 }
+
+/* Process Button */
+#process-btn {
+    padding: 10px 20px;
+    margin: 10px;
+    border: none;
+    border-radius: 5px;
+    background-color: #28a745; /* Green background */
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+#process-btn:hover {
+    background-color: #218838; /* Darker green on hover */
+}
