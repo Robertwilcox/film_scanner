@@ -32,28 +32,75 @@ def resize_to_fit_window(image, window_width, window_height):
     return resized_image, scale
 
 
-def auto_detect_bboxes(image):
+def auto_detect_bboxes_with_perforations(image):
     """
-    Auto-detect bounding boxes for negatives.
+    Auto-detect bounding boxes for negatives using perforation landmarks.
     """
+    # Convert to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 
-    # Threshold and clean up noise
-    _, thresh = cv2.threshold(blurred, 200, 255, cv2.THRESH_BINARY_INV)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-    cleaned = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+    # Use adaptive thresholding for consistent edge detection
+    thresh = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 2
+    )
 
     # Find contours
-    contours, _ = cv2.findContours(cleaned, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    # Filter contours based on aspect ratio and area
-    detected_bboxes = [
-        cv2.boundingRect(contour)
-        for contour in contours
-        if 1.5 < cv2.boundingRect(contour)[2] / cv2.boundingRect(contour)[3] < 3.5  # Aspect ratio range
-        and cv2.contourArea(contour) > 5000  # Minimum area threshold
-    ]
+    # Detect perforations based on their expected size and aspect ratio
+    perforations = []
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        aspect_ratio = w / h
+        if 1.8 < aspect_ratio < 2.8 and 10 < w < 50 and 5 < h < 30:  # Approximate perforation dimensions in pixels
+            perforations.append((x, y, w, h))
+
+    print(f"Detected {len(perforations)} perforations.")
+
+    # Visualize perforations for debugging
+    debug_image = cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR)
+    for x, y, w, h in perforations:
+        cv2.rectangle(debug_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+    cv2.imshow("Perforations", debug_image)
+    cv2.waitKey(500)  # Adjust or remove for production
+
+    # Group perforations into rows (film edges)
+    perforations = sorted(perforations, key=lambda p: p[1])  # Sort by vertical position
+    grouped_perforations = []
+    row = []
+    tolerance = 10  # Adjust based on image resolution
+    for i, perf in enumerate(perforations):
+        if i > 0 and abs(perf[1] - perforations[i - 1][1]) > tolerance:
+            grouped_perforations.append(row)
+            row = []
+        row.append(perf)
+    if row:  # Add the last group
+        grouped_perforations.append(row)
+
+    print(f"Detected {len(grouped_perforations)} perforation rows.")
+
+    # Infer frame bounding boxes based on perforation positions
+    detected_bboxes = []
+    for row in grouped_perforations:
+        if len(row) < 2:
+            continue  # Skip incomplete rows
+        left_perforation = min(row, key=lambda p: p[0])
+        right_perforation = max(row, key=lambda p: p[0])
+
+        # Estimate frame bounding box based on perforation positions
+        lx, ly, lw, lh = left_perforation
+        rx, ry, rw, rh = right_perforation
+
+        # Frames are roughly between the perforations
+        frame_x = lx + lw
+        frame_y = ly
+        frame_w = rx - frame_x
+        frame_h = int(frame_w * (24 / 36))  # Maintain 24x36 ratio
+
+        detected_bboxes.append((frame_x, frame_y, frame_w, frame_h))
+
+    print(f"Detected {len(detected_bboxes)} frame bounding boxes.")
+
     return detected_bboxes
 
 
@@ -186,7 +233,7 @@ def process_image(image_path):
         return
 
     # Auto-detect bounding boxes
-    bboxes = auto_detect_bboxes(image)
+    bboxes = auto_detect_bboxes_with_perforations(image)
     print(f"Detected {len(bboxes)} bounding boxes.")
 
     # Resize the image to fit the window
