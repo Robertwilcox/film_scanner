@@ -212,3 +212,18 @@ button:hover {
 #process-btn:hover {
     background-color: #218838; /* Darker green on hover */
 }
+
+#delete-all-btn {
+    padding: 10px 20px;
+    margin: 10px;
+    border: none;
+    border-radius: 5px;
+    background-color: red; /* Red background for warning */
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+#delete-all-btn:hover {
+    background-color: darkred; /* Darker red on hover */
+}

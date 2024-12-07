@@ -30,6 +30,7 @@ const downloadAllBtn = document.getElementById('download-all-btn');
 const uploadImageBtn = document.getElementById('upload-image-btn');
 const imageUploadInput = document.getElementById('image-upload-input');
 const processBtn = document.getElementById('process-btn'); // Process Image Button
+const deleteAllBtn = document.getElementById('delete-all-btn');
 
 let imagesDB = null; // IndexedDB instance
 let activeFolder = ''; // Current folder selected
@@ -44,7 +45,11 @@ function initIndexedDB() {
             db.createObjectStore('images', { keyPath: 'id', autoIncrement: true });
             console.log('Object store "images" created.');
         }
-    };
+        if (!db.objectStoreNames.contains('logs')) {
+            db.createObjectStore('logs', { keyPath: 'id', autoIncrement: true });
+            console.log('Object store "logs" created.');
+        }
+    };    
 
     request.onsuccess = (event) => {
         imagesDB = event.target.result;
@@ -56,34 +61,60 @@ function initIndexedDB() {
 
     request.onerror = (event) => {
         console.error('IndexedDB initialization failed:', event.target.error);
+        //saveLog(`IndexedDB initialization failed: ${event.target.error.message}`, 'ERROR');
     };
+}
+
+// Save logs to IndexedDB
+function saveLog(message, level = "INFO") {
+    const logEntry = {
+        timestamp: new Date().toISOString(),
+        level: level,
+        message: message,
+    };
+
+    if (imagesDB) {
+        const transaction = imagesDB.transaction('logs', 'readwrite');
+        const store = transaction.objectStore('logs');
+        store.add(logEntry);
+    } else {
+        console.warn('Logs will fall back to localStorage as IndexedDB is not initialized.');
+        const logs = JSON.parse(localStorage.getItem('appLogs') || '[]');
+        logs.push(logEntry);
+        localStorage.setItem('appLogs', JSON.stringify(logs));
+    }
 }
 
 // Clear all data from IndexedDB
 function clearIndexedDB() {
     if (!imagesDB) {
         console.error('Cannot clear: IndexedDB is not initialized.');
+        //saveLog(`Error during processing: IndexedDB is not initialized.`, "ERROR");
         return;
     }
 
-    const transaction = imagesDB.transaction('images', 'readwrite');
+    const transaction = imagesDB.transaction('images', 'readwrite'); // Only target 'images' object store
     const store = transaction.objectStore('images');
     const clearRequest = store.clear();
 
     clearRequest.onsuccess = () => {
-        console.log('All data cleared from IndexedDB.');
+        console.log('All data cleared from "images" object store.');
         updateFolderList([]); // Clear folder list in UI
     };
 
     clearRequest.onerror = (event) => {
-        console.error('Error clearing IndexedDB:', event.target.error);
+        console.error('Error clearing IndexedDB "images" object store:', event.target.error);
+        //saveLog(`Error clearing images object store: ${event.target.error.message}`, "ERROR");
     };
 }
+
 
 // Save image to IndexedDB
 function saveToIndexedDB(imageBlob, fileName, folderName = activeFolder) {
     if (!imagesDB) {
         console.error('Cannot save: IndexedDB is not initialized.');
+        //saveLog(`Error during processing: ${error.message}`, "ERROR");
+
         return;
     }
 
@@ -98,6 +129,7 @@ function saveToIndexedDB(imageBlob, fileName, folderName = activeFolder) {
 
     transaction.onerror = (event) => {
         console.error('Error saving to IndexedDB:', event.target.error);
+        //saveLog(`Error during processing: ${error.message}`, "ERROR");
         alert('Failed to save image. Please try again.');
     };
 }
@@ -106,6 +138,7 @@ function saveToIndexedDB(imageBlob, fileName, folderName = activeFolder) {
 function retrieveFromIndexedDB() {
     if (!imagesDB) {
         console.error('Cannot retrieve images: IndexedDB is not initialized.');
+        //(`Error during processing: ${error.message}`, "ERROR");
         return;
     }
 
@@ -134,6 +167,7 @@ function retrieveFromIndexedDB() {
 
     request.onerror = (event) => {
         console.error('Error retrieving from IndexedDB:', event.target.error);
+        //saveLog(`Error during processing: ${error.message}`, "ERROR");
     };
 }
 
@@ -155,6 +189,48 @@ function updateFolderList(folders) {
     });
 }
 
+// Function to export logs to a file
+function exportLogs() {
+    if (!imagesDB) {
+        console.warn("IndexedDB is not initialized. Retrieving logs from localStorage.");
+        const fallbackLogs = JSON.parse(localStorage.getItem('appLogs') || '[]');
+        //saveLogsToFile(fallbackLogs);
+        return;
+    }
+
+    // Fetch logs from IndexedDB
+    const transaction = imagesDB.transaction('logs', 'readonly');
+    const store = transaction.objectStore('logs');
+    const request = store.getAll();
+
+    request.onsuccess = (event) => {
+        const logs = event.target.result;
+        //saveLogsToFile(logs);
+    };
+
+    request.onerror = (event) => {
+        console.error("Failed to retrieve logs:", event.target.error);
+        const fallbackLogs = JSON.parse(localStorage.getItem('appLogs') || '[]');
+        //saveLogsToFile(fallbackLogs);
+    };
+}
+
+// Save logs to a file
+function saveLogsToFile(logs) {
+    const logData = JSON.stringify(logs, null, 2); // Pretty print JSON
+    const blob = new Blob([logData], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    // Create a download link and trigger it
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `logs_${new Date().toISOString().replace(/:/g, '-')}.json`; // Unique file name
+    a.click();
+
+    // Revoke the object URL after download
+    URL.revokeObjectURL(url);
+}
+
 // Display folder contents
 function displayFolderContents(images) {
     folderImages.innerHTML = '';
@@ -162,6 +238,7 @@ function displayFolderContents(images) {
     images.forEach((image) => {
         if (!(image.blob instanceof Blob)) {
             console.error('Invalid blob detected. Skipping image:', image);
+            //saveLog(`Error during processing: ${error.message}`, "ERROR");
             return;
         }
 
@@ -205,17 +282,22 @@ imageUploadInput.addEventListener('change', (event) => {
         const imageBlob = new Blob([e.target.result], { type: file.type });
         const fileName = file.name;
 
-        // Save the image to IndexedDB
+        // Save the original image to IndexedDB
         saveToIndexedDB(imageBlob, fileName);
+
+        alert(`Image uploaded successfully: ${fileName}`);
     };
 
     reader.onerror = (err) => {
         console.error('Error reading file:', err);
+        //saveLog(`Error during processing: ${error.message}`, "ERROR");
         alert('Failed to read file. Please try again.');
     };
 
     reader.readAsArrayBuffer(file); // Read the file as an ArrayBuffer
 });
+
+
 
 // Select or create a folder
 scanBtn.addEventListener('click', () => {
@@ -254,11 +336,28 @@ processBtn.addEventListener('click', async () => {
         // Create a new folder for processed images
         const processedFolderName = `processed_${activeFolder}`;
         for (let image of images) {
-            // Process each image
-            const processedImageBlob = await processImage(image.blob);
+            // Send the original image to the backend for processing
+            const formData = new FormData();
+            formData.append('file', image.blob);
 
-            // Save the processed image to the new folder
-            saveToIndexedDB(processedImageBlob, `processed_${image.name}`, processedFolderName);
+            try {
+                const response = await fetch('http://127.0.0.1:5000/process', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to process image');
+                }
+
+                const processedBlob = await response.blob();
+
+                // Save the processed image to IndexedDB
+                saveToIndexedDB(processedBlob, `processed_${image.name}`, processedFolderName);
+            } catch (error) {
+                console.error('Error processing image:', error);
+                alert('Failed to process one or more images.');
+            }
         }
 
         alert(`Processed images have been saved to the folder: ${processedFolderName}`);
@@ -269,6 +368,10 @@ processBtn.addEventListener('click', async () => {
         alert('Failed to retrieve images for processing.');
     };
 });
+
+
+
+
 
 // Process a single image (convert negative to positive)
 async function processImage(imageBlob) {
@@ -299,6 +402,7 @@ async function processImage(imageBlob) {
 
         img.onerror = () => {
             console.error('Failed to process image.');
+            //saveLog(`Error during processing: ${error.message}`, "ERROR");
             resolve(null);
         };
 
@@ -343,6 +447,7 @@ async function startCamera() {
         setupTapToFocus(camera);
     } catch (error) {
         console.error('Error starting camera:', error);
+        //saveLog(`Error during processing: ${error.message}`, "ERROR");
         alert('Failed to access the camera.');
     }
 }
@@ -356,12 +461,14 @@ function setupTapToFocus(videoElement) {
             // Check if autofocus is supported
             if (!track.getCapabilities || !track.applyConstraints) {
                 console.error('Manual focus is not supported on this device/browser.');
+                //saveLog(`Error during processing: ${error.message}`, "ERROR");
                 return;
             }
 
             const capabilities = track.getCapabilities();
             if (!capabilities.focusMode || !capabilities.focusMode.includes('auto')) {
                 console.error('Autofocus is not supported on this camera.');
+                //saveLog(`Error during processing: ${error.message}`, "ERROR");
                 return;
             }
 
@@ -386,9 +493,11 @@ function setupTapToFocus(videoElement) {
                 }, 2000); // Adjust delay as needed
             } catch (err) {
                 console.error('Error triggering autofocus:', err);
+                //saveLog(`Error during processing: ${error.message}`, "ERROR");
             }
         } else {
             console.error('No video track available for autofocus.');
+            //saveLog(`Error during processing: ${error.message}`, "ERROR");
         }
     });
 }
@@ -411,4 +520,40 @@ captureBtn.addEventListener('click', () => {
 document.addEventListener('DOMContentLoaded', () => {
     folderView.style.display = 'flex'; // Show folder view on load
     initIndexedDB(); // Initialize IndexedDB
+
+    // Attach export logs button listener
+    document.getElementById('export-logs-btn').addEventListener('click', exportLogs);
+});
+
+deleteAllBtn.addEventListener('click', () => {
+    // Show confirmation prompt
+    const confirmed = confirm('Are you sure you want to delete all files? This action cannot be undone.');
+
+    if (!confirmed) {
+        return; // Exit if user cancels
+    }
+
+    // Clear IndexedDB
+    if (!imagesDB) {
+        console.error('Cannot delete files: IndexedDB is not initialized.');
+        //saveLog(`Error during processing: ${error.message}`, "ERROR");
+        alert('An error occurred. Please try again.');
+        return;
+    }
+
+    const transaction = imagesDB.transaction('images', 'readwrite');
+    const store = transaction.objectStore('images');
+    const clearRequest = store.clear();
+
+    clearRequest.onsuccess = () => {
+        console.log('All data cleared from IndexedDB.');
+        alert('All files have been deleted.');
+        retrieveFromIndexedDB(); // Refresh the UI
+    };
+
+    clearRequest.onerror = (event) => {
+        console.error('Error clearing IndexedDB:', event.target.error);
+        //saveLog(`Error during processing: ${error.message}`, "ERROR");s
+        alert('Failed to delete files. Please try again.');
+    };
 });

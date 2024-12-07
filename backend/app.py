@@ -1,9 +1,15 @@
 from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS  # Import CORS
 import cv2
 import numpy as np
 import io
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
+
+@app.route('/')
+def home():
+    return "Film Scanner Backend is Running"
 
 @app.route('/process', methods=['POST'])
 def process_image():
