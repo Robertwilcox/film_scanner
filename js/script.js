@@ -37,9 +37,11 @@ let activeFolder = ''; // Current folder selected
 
 // Initialize IndexedDB
 function initIndexedDB() {
+    console.log('Initializing IndexedDB...');
     const request = indexedDB.open('FilmScannerDB', 1);
 
     request.onupgradeneeded = (event) => {
+        console.log('Upgrading IndexedDB schema...');
         const db = event.target.result;
         if (!db.objectStoreNames.contains('images')) {
             db.createObjectStore('images', { keyPath: 'id', autoIncrement: true });
@@ -49,21 +51,20 @@ function initIndexedDB() {
             db.createObjectStore('logs', { keyPath: 'id', autoIncrement: true });
             console.log('Object store "logs" created.');
         }
-    };    
+    };
 
     request.onsuccess = (event) => {
         imagesDB = event.target.result;
         console.log('IndexedDB initialized successfully.');
-
-        // Clear all data on app startup
-        clearIndexedDB();
+        clearIndexedDB(); // Optionally clear old data
     };
 
     request.onerror = (event) => {
         console.error('IndexedDB initialization failed:', event.target.error);
-        //saveLog(`IndexedDB initialization failed: ${event.target.error.message}`, 'ERROR');
+        alert('Failed to initialize IndexedDB. Some features may not work.');
     };
 }
+
 
 // Save logs to IndexedDB
 function saveLog(message, level = "INFO") {
@@ -138,10 +139,10 @@ function saveToIndexedDB(imageBlob, fileName, folderName = activeFolder) {
 function retrieveFromIndexedDB() {
     if (!imagesDB) {
         console.error('Cannot retrieve images: IndexedDB is not initialized.');
-        //(`Error during processing: ${error.message}`, "ERROR");
         return;
     }
 
+    console.log('Retrieving images from IndexedDB...');
     const transaction = imagesDB.transaction('images', 'readonly');
     const store = transaction.objectStore('images');
     const request = store.getAll();
@@ -158,6 +159,7 @@ function retrieveFromIndexedDB() {
             return map;
         }, {});
 
+        console.log('Mapped folders:', folderMap);
         updateFolderList(Object.entries(folderMap));
 
         if (activeFolder) {
@@ -166,8 +168,8 @@ function retrieveFromIndexedDB() {
     };
 
     request.onerror = (event) => {
-        console.error('Error retrieving from IndexedDB:', event.target.error);
-        //saveLog(`Error during processing: ${error.message}`, "ERROR");
+        console.error('Error retrieving images from IndexedDB:', event.target.error);
+        alert('Failed to retrieve images. Please try again.');
     };
 }
 
@@ -276,13 +278,15 @@ imageUploadInput.addEventListener('change', (event) => {
         return;
     }
 
+    console.log('Selected file for upload:', file);
+
     const reader = new FileReader();
 
     reader.onload = (e) => {
         const imageBlob = new Blob([e.target.result], { type: file.type });
         const fileName = file.name;
 
-        // Save the original image to IndexedDB
+        console.log(`Saving uploaded image "${fileName}" to IndexedDB.`);
         saveToIndexedDB(imageBlob, fileName);
 
         alert(`Image uploaded successfully: ${fileName}`);
@@ -290,12 +294,12 @@ imageUploadInput.addEventListener('change', (event) => {
 
     reader.onerror = (err) => {
         console.error('Error reading file:', err);
-        //saveLog(`Error during processing: ${error.message}`, "ERROR");
         alert('Failed to read file. Please try again.');
     };
 
-    reader.readAsArrayBuffer(file); // Read the file as an ArrayBuffer
+    reader.readAsArrayBuffer(file);
 });
+
 
 
 
@@ -316,11 +320,13 @@ scanBtn.addEventListener('click', () => {
 // Process images in the selected folder
 processBtn.addEventListener('click', async () => {
     if (!activeFolder) {
+        console.error('No active folder selected.');
         alert('Please select a folder first.');
         return;
     }
 
-    // Retrieve all images from the current folder
+    console.log(`Processing images in folder: ${activeFolder}`);
+
     const transaction = imagesDB.transaction('images', 'readonly');
     const store = transaction.objectStore('images');
     const request = store.getAll();
@@ -328,49 +334,82 @@ processBtn.addEventListener('click', async () => {
     request.onsuccess = async (event) => {
         const images = event.target.result.filter(image => image.folder === activeFolder);
 
+        console.log(`Images retrieved for processing:`, images);
+
         if (images.length === 0) {
+            console.warn('No images found in the selected folder.');
             alert('No images to process in this folder.');
             return;
         }
 
-        // Create a new folder for processed images
         const processedFolderName = `processed_${activeFolder}`;
+        console.log(`Processed folder name: ${processedFolderName}`);
+
         for (let image of images) {
-            // Send the original image to the backend for processing
             const formData = new FormData();
             formData.append('file', image.blob);
 
             try {
+                console.log(`Sending image "${image.name}" to backend for processing.`);
                 const response = await fetch('http://127.0.0.1:5000/process', {
                     method: 'POST',
                     body: formData,
                 });
 
                 if (!response.ok) {
-                    throw new Error('Failed to process image');
+                    console.error(`Backend response error (status: ${response.status}):`, await response.text());
+                    throw new Error('Failed to process image. Backend returned an error.');
                 }
 
-                const processedBlob = await response.blob();
+                let data;
+                try {
+                    data = await response.json();
+                    console.log('Backend response data:', data);
+                } catch (jsonError) {
+                    console.error('Failed to parse backend JSON response:', jsonError);
+                    throw new Error('Invalid JSON response from backend.');
+                }
 
-                // Save the processed image to IndexedDB
-                saveToIndexedDB(processedBlob, `processed_${image.name}`, processedFolderName);
+                if (!data.processed_files || data.processed_files.length === 0) {
+                    console.warn('No processed images returned from backend.');
+                    throw new Error('No processed images returned from the backend.');
+                }
+
+                console.log(`Processed files:`, data.processed_files);
+
+                for (const file of data.processed_files) {
+                    try {
+                        console.log(`Fetching processed image: ${file}`);
+                        const res = await fetch(file);
+                        if (!res.ok) {
+                            console.error(`Failed to fetch processed image (status: ${res.status}): ${file}`);
+                            throw new Error('Failed to download processed image from backend.');
+                        }
+
+                        const processedBlob = await res.blob();
+                        const fileName = file.split('/').pop();
+
+                        console.log(`Saving processed image "${fileName}" to IndexedDB.`);
+                        saveToIndexedDB(processedBlob, fileName, processedFolderName);
+                    } catch (downloadError) {
+                        console.error('Error downloading processed image:', downloadError);
+                        alert('Error downloading one or more processed images.');
+                    }
+                }
+
+                alert(`Processed images have been saved to the folder: ${processedFolderName}`);
             } catch (error) {
-                console.error('Error processing image:', error);
-                alert('Failed to process one or more images.');
+                console.error('Error processing image:', error.message);
+                alert(`Error: ${error.message}`);
             }
         }
-
-        alert(`Processed images have been saved to the folder: ${processedFolderName}`);
     };
 
     request.onerror = (event) => {
-        console.error('Error retrieving images for processing:', event.target.error);
-        alert('Failed to retrieve images for processing.');
+        console.error('Error retrieving images from IndexedDB:', event.target.error);
+        alert('Failed to retrieve images for processing. Please try again.');
     };
 });
-
-
-
 
 
 // Process a single image (convert negative to positive)
@@ -522,7 +561,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initIndexedDB(); // Initialize IndexedDB
 
     // Attach export logs button listener
-    document.getElementById('export-logs-btn').addEventListener('click', exportLogs);
+    //document.getElementById('export-logs-btn').addEventListener('click', exportLogs);
 });
 
 deleteAllBtn.addEventListener('click', () => {
