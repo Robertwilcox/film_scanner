@@ -1,8 +1,9 @@
 import cv2
-import numpy as np
 import os
+from resize_utils import resize_to_fit_window, draw_bboxes
+from bbox_detection import auto_detect_bboxes_with_perforations
+from perf_wrapper import get_perforation_statistics
 
-# Input and output directories
 INPUT_DIR = "tst_jpgs"  # Directory containing test images
 OUTPUT_DIR = "output"   # Directory to save extracted negatives
 
@@ -10,145 +11,19 @@ OUTPUT_DIR = "output"   # Directory to save extracted negatives
 if not os.path.exists(OUTPUT_DIR):
     os.makedirs(OUTPUT_DIR)
 
-# Globals
 bboxes = []  # List of bounding boxes
-selected_idx = -1  # Currently selected bounding box
-dragging = False  # True if dragging a box
-resizing = False  # True if resizing a box
-current_anchor = None  # Current anchor being dragged
-start_point = None  # Start point for dragging
-anchor_size = 10  # Size of the anchors for resizing
+selected_idx = -1  # Index of the currently selected bounding box
+anchor_being_dragged = None
 anchor_radius = 10
-anchor_being_dragged = None  # To track which anchor point is being dragged
 
-
-def resize_to_fit_window(image, window_width, window_height):
-    """
-    Resizes the image to fit within the specified window dimensions while preserving aspect ratio.
-    """
-    h, w = image.shape[:2]
-    scale = min(window_width / w, window_height / h)
-    resized_image = cv2.resize(image, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-    return resized_image, scale
-
-
-def auto_detect_bboxes_with_perforations(image):
-    """
-    Auto-detect bounding boxes for negatives using perforation landmarks.
-    """
-    # Convert to grayscale
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Use adaptive thresholding for consistent edge detection
-    thresh = cv2.adaptiveThreshold(
-        gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 2
-    )
-
-    # Find contours
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    # Detect perforations based on their expected size and aspect ratio
-    perforations = []
-    for contour in contours:
-        x, y, w, h = cv2.boundingRect(contour)
-        aspect_ratio = w / h
-        if 1.8 < aspect_ratio < 2.8 and 10 < w < 50 and 5 < h < 30:  # Approximate perforation dimensions in pixels
-            perforations.append((x, y, w, h))
-
-    print(f"Detected {len(perforations)} perforations.")
-
-    # Visualize perforations for debugging
-    debug_image = cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR)
-    for x, y, w, h in perforations:
-        cv2.rectangle(debug_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-    cv2.imshow("Perforations", debug_image)
-    cv2.waitKey(500)  # Adjust or remove for production
-
-    # Group perforations into rows (film edges)
-    perforations = sorted(perforations, key=lambda p: p[1])  # Sort by vertical position
-    grouped_perforations = []
-    row = []
-    tolerance = 10  # Adjust based on image resolution
-    for i, perf in enumerate(perforations):
-        if i > 0 and abs(perf[1] - perforations[i - 1][1]) > tolerance:
-            grouped_perforations.append(row)
-            row = []
-        row.append(perf)
-    if row:  # Add the last group
-        grouped_perforations.append(row)
-
-    print(f"Detected {len(grouped_perforations)} perforation rows.")
-
-    # Infer frame bounding boxes based on perforation positions
-    detected_bboxes = []
-    for row in grouped_perforations:
-        if len(row) < 2:
-            continue  # Skip incomplete rows
-        left_perforation = min(row, key=lambda p: p[0])
-        right_perforation = max(row, key=lambda p: p[0])
-
-        # Estimate frame bounding box based on perforation positions
-        lx, ly, lw, lh = left_perforation
-        rx, ry, rw, rh = right_perforation
-
-        # Frames are roughly between the perforations
-        frame_x = lx + lw
-        frame_y = ly
-        frame_w = rx - frame_x
-        frame_h = int(frame_w * (24 / 36))  # Maintain 24x36 ratio
-
-        detected_bboxes.append((frame_x, frame_y, frame_w, frame_h))
-
-    print(f"Detected {len(detected_bboxes)} frame bounding boxes.")
-
-    return detected_bboxes
-
-
-def draw_bboxes(image, scale):
-    """
-    Draw all bounding boxes and their anchor points on the image.
-    """
-    for bx, by, bw, bh in bboxes:
-        scaled_box = (int(bx * scale), int(by * scale), int(bw * scale), int(bh * scale))
-        x, y, w, h = scaled_box
-
-        # Draw the bounding box
-        cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
-        # Draw anchor points as outlined circles
-        anchors = [
-            (x, y), (x + w, y), (x, y + h), (x + w, y + h)
-        ]  # Top-left, Top-right, Bottom-left, Bottom-right
-        for ax, ay in anchors:
-            cv2.circle(image, (ax, ay), anchor_radius, (0, 0, 255), 2)  # Outline circle
-
-
-
-def get_anchor_under_mouse(x, y, scale):
-    """
-    Check if the mouse is over a resize anchor.
-    """
-    for idx, (bx, by, bw, bh) in enumerate(bboxes):
-        anchors = [
-            (bx, by), (bx + bw, by), (bx, by + bh), (bx + bw, by + bh)  # Top-left, Top-right, Bottom-left, Bottom-right
-        ]
-        for i, (ax, ay) in enumerate(anchors):
-            if abs(x - int(ax * scale)) < anchor_size and abs(y - int(ay * scale)) < anchor_size:
-                return idx, i
-    return None, None
-
-
-# Adjust the size of the interactive area around anchors
-anchor_radius = 10  # Radius of the anchor circle
 
 def mouse_callback(event, x, y, flags, param):
     """
-    Handle mouse events for interacting with bounding boxes, including resizing anchors,
-    moving boxes, adding new boxes, and removing existing boxes.
+    Handle mouse events for interacting with bounding boxes, including resizing and moving.
     """
     global bboxes, selected_idx, anchor_being_dragged
 
-    scale = param  # Scale factor for converting coordinates
+    scale = param  # Scale factor for adjusting coordinates
     scaled_x, scaled_y = int(x / scale), int(y / scale)
 
     if event == cv2.EVENT_LBUTTONDOWN:  # Left-click
@@ -160,18 +35,15 @@ def mouse_callback(event, x, y, flags, param):
                 (bx, by), (bx + bw, by), (bx, by + bh), (bx + bw, by + bh)
             ]  # Top-left, Top-right, Bottom-left, Bottom-right
             for i, (ax, ay) in enumerate(anchors):
-                # Check if click is within the anchor circle
-                if (scaled_x - ax) ** 2 + (scaled_y - ay) ** 2 <= anchor_radius ** 2:
+                if abs(scaled_x - ax) <= anchor_radius and abs(scaled_y - ay) <= anchor_radius:
                     selected_idx = idx
                     anchor_being_dragged = (i, idx)  # Anchor index and bbox index
-                    print(f"Dragging anchor {i} of box {idx}")
                     return
 
         # Check if clicked inside a bounding box for movement
         for idx, (bx, by, bw, bh) in enumerate(bboxes):
             if bx <= scaled_x <= bx + bw and by <= scaled_y <= by + bh:
                 selected_idx = idx
-                print(f"Selected bounding box {idx} for movement.")
                 return
 
         # Reset selection if no anchor or box is clicked
@@ -184,148 +56,145 @@ def mouse_callback(event, x, y, flags, param):
 
             # Update the bounding box based on the dragged anchor
             if anchor_idx == 0:  # Top-left
-                bboxes[box_idx] = (scaled_x, scaled_y, bx + bw - scaled_x, by + bh - scaled_y)
+                new_x, new_y = scaled_x, scaled_y
+                new_w, new_h = bx + bw - new_x, by + bh - new_y
             elif anchor_idx == 1:  # Top-right
-                bboxes[box_idx] = (bx, scaled_y, scaled_x - bx, by + bh - scaled_y)
+                new_x, new_y = bx, scaled_y
+                new_w, new_h = scaled_x - bx, by + bh - new_y
             elif anchor_idx == 2:  # Bottom-left
-                bboxes[box_idx] = (scaled_x, by, bx + bw - scaled_x, scaled_y - by)
+                new_x, new_y = scaled_x, by
+                new_w, new_h = bx + bw - new_x, scaled_y - by
             elif anchor_idx == 3:  # Bottom-right
-                bboxes[box_idx] = (bx, by, scaled_x - bx, scaled_y - by)
-            print(f"Resized box {box_idx}: {bboxes[box_idx]}")
-            return
+                new_x, new_y = bx, by
+                new_w, new_h = scaled_x - bx, scaled_y - by
+
+            # Ensure dimensions remain valid
+            if new_w > 0 and new_h > 0:
+                bboxes[box_idx] = (new_x, new_y, new_w, new_h)
 
         elif selected_idx != -1 and flags == cv2.EVENT_FLAG_LBUTTON:  # Move the box
             # Move the selected bounding box
             bx, by, bw, bh = bboxes[selected_idx]
-            dx, dy = scaled_x - bx, scaled_y - by
             bboxes[selected_idx] = (scaled_x - bw // 2, scaled_y - bh // 2, bw, bh)
-            print(f"Moved bounding box {selected_idx} to: ({scaled_x}, {scaled_y})")
-            return
 
     elif event == cv2.EVENT_LBUTTONUP:  # Release left-click
         anchor_being_dragged = None
 
     elif event == cv2.EVENT_RBUTTONDOWN:  # Right-click to add a new box
-        box_size = 100  # Increased default size of the new bounding box
+        box_size = 100  # Default size of the new bounding box
         new_box = (scaled_x - box_size // 2, scaled_y - box_size // 2, box_size, box_size)
         bboxes.append(new_box)
-        selected_idx = -1  # Reset selection
-        print(f"Added new bounding box at: ({scaled_x}, {scaled_y})")
 
     elif event == cv2.EVENT_LBUTTONDBLCLK:  # Double-click to remove a bounding box
         for idx, (bx, by, bw, bh) in enumerate(bboxes):
             if bx <= scaled_x <= bx + bw and by <= scaled_y <= by + bh:
-                print(f"Removed bounding box {idx}: ({bx}, {by}, {bw}, {bh})")
                 bboxes.pop(idx)
                 selected_idx = -1  # Reset selection
                 return
 
-def process_image(image_path):
-    """
-    Process a single image with GUI for bounding box adjustment.
-    """
-    global bboxes
 
+def process_image(image_path):
+    global bboxes
     print(f"Processing {image_path}")
     image = cv2.imread(image_path)
-    if image is None:
-        print(f"Error: Unable to load {image_path}")
+    if image is None or image.size == 0:
+        print(f"Error: Unable to load {image_path}. Skipping.")
         return
 
-    # Auto-detect bounding boxes
-    bboxes = auto_detect_bboxes_with_perforations(image)
-    print(f"Detected {len(bboxes)} bounding boxes.")
+    # Get perforation statistics
+    perf_stats = get_perforation_statistics(image_path)
+    print("Perforation Statistics Retrieved:")
+    print(perf_stats)
 
-    # Resize the image to fit the window
+    # Step 1: Detect initial bounding boxes
+    from bbox_detection import detect_initial_boxes
+    initial_bboxes = detect_initial_boxes(image)
+
+    # Debug: Print initial bounding boxes
+    if not initial_bboxes:
+        print(f"No bounding boxes detected for {image_path}. Skipping.")
+        return
+
+    # Convert initial bounding boxes to (x, y, w, h) format
+    converted_bboxes = []
+    for box in initial_bboxes:
+        x_coords, y_coords = zip(*box)
+        x_min, x_max = int(min(x_coords)), int(max(x_coords))
+        y_min, y_max = int(min(y_coords)), int(max(y_coords))
+        w, h = x_max - x_min, y_max - y_min
+        converted_bboxes.append((x_min, y_min, w, h))
+
+    initial_bboxes = converted_bboxes
+
+    # Debug: Visualize initial bounding boxes
     resized_image, scale = resize_to_fit_window(image, 800, 600)
+    debug_initial = resized_image.copy()
+    draw_bboxes(debug_initial, initial_bboxes, scale)
+    cv2.imshow("Initial Bounding Boxes", debug_initial)
+    cv2.imwrite(os.path.join(OUTPUT_DIR, "initial_bboxes.jpg"), debug_initial)
+    cv2.waitKey(500)
+    cv2.destroyAllWindows()
+
+    print(f"Initial bounding boxes detected: {len(initial_bboxes)}")
+
+    # Step 2: Refine bounding boxes using perforation statistics
+    from bbox_detection import filter_boxes_with_perforation_data
+    bboxes = filter_boxes_with_perforation_data(initial_bboxes, perf_stats, image.shape)
+
+    # Debug: Visualize refined bounding boxes
+    debug_refined = resized_image.copy()
+    draw_bboxes(debug_refined, bboxes, scale)
+    cv2.imshow("Refined Bounding Boxes", debug_refined)
+    cv2.imwrite(os.path.join(OUTPUT_DIR, "refined_bboxes.jpg"), debug_refined)
+    cv2.waitKey(500)
+    cv2.destroyAllWindows()
+
+    print(f"Refined bounding boxes: {len(bboxes)}")
 
     # Set up the main window
     main_window_name = "Adjust Bounding Boxes"
-    instruction_window_name = "Instructions"
     cv2.namedWindow(main_window_name)
-    cv2.namedWindow(instruction_window_name)
     cv2.setMouseCallback(main_window_name, mouse_callback, scale)
-
-    # Instruction lines
-    instruction_lines = [
-        "INSTRUCTIONS:",
-        "- Drag anchors to resize boxes",
-        "- Drag boxes to move them",
-        "- Right-click: Add box",
-        "- Double-click: Remove box",
-        "- Enter: Save and Exit",
-        "- ESC: Exit without saving",
-        "- Close window: Save and Exit"
-    ]
-
-    # Create an instruction image
-    instruction_height = 300
-    instruction_width = 500
-    instruction_panel = np.zeros((instruction_height, instruction_width, 3), dtype=np.uint8)
-
-    # Add instructions to the panel
-    for i, line in enumerate(instruction_lines):
-        cv2.putText(
-            instruction_panel,
-            line,
-            (10, 30 + i * 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (255, 255, 255),
-            1,
-        )
-
-    saved = False  # Flag to indicate if changes were saved
 
     try:
         while True:
-            # Draw bounding boxes on a copy of the resized image
             display_img = resized_image.copy()
-            draw_bboxes(display_img, scale)
-
-            # Show the main image and instructions
+            draw_bboxes(display_img, bboxes, scale)
             cv2.imshow(main_window_name, display_img)
-            cv2.imshow(instruction_window_name, instruction_panel)
-
-            # Handle key press or window closure
             key = cv2.waitKey(1)
-            if key == 27:  # ESC to exit without saving
-                print("Exiting without saving.")
-                saved = False
+            if key == 27:  # ESC to exit
                 break
-            elif key == 13:  # Enter to save and exit
-                print("Saving and exiting.")
-                saved = True
-                break
-            elif cv2.getWindowProperty(main_window_name, cv2.WND_PROP_VISIBLE) < 1:
-                print("Main window closed. Saving and exiting.")
-                saved = True
-                break
-            elif cv2.getWindowProperty(instruction_window_name, cv2.WND_PROP_VISIBLE) < 1:
-                print("Instruction window closed. Saving and exiting.")
-                saved = True
-                break
-    finally:
-        # Save all bounding boxes only if Enter was pressed or window was closed
-        if saved:
-            for idx, (x, y, w, h) in enumerate(bboxes):
-                cropped = image[y:y+h, x:x+w]
-                output_path = os.path.join(
-                    OUTPUT_DIR, f"{os.path.splitext(os.path.basename(image_path))[0]}_negative_{idx + 1}.jpg"
-                )
-                cv2.imwrite(output_path, cropped)
-                print(f"Saved: {output_path}")
 
-        # Destroy windows only if they are still open
-        if cv2.getWindowProperty(main_window_name, cv2.WND_PROP_VISIBLE) >= 1:
-            cv2.destroyWindow(main_window_name)
-        if cv2.getWindowProperty(instruction_window_name, cv2.WND_PROP_VISIBLE) >= 1:
-            cv2.destroyWindow(instruction_window_name)
+    except KeyboardInterrupt:
+        print("Keyboard interrupt detected. Exiting.")
+
+    finally:
+        for idx, (x, y, w, h) in enumerate(bboxes):
+            x_end = min(x + w, image.shape[1])
+            y_end = min(y + h, image.shape[0])
+            x, y = max(x, 0), max(y, 0)
+
+            if x >= x_end or y >= y_end:
+                print(f"Skipping invalid box: {x, y, w, h}")
+                continue
+
+            cropped = image[y:y_end, x:x_end]
+            if cropped.size == 0:
+                print(f"Skipping empty crop for box: {x, y, w, h}")
+                continue
+
+            output_path = os.path.join(
+                OUTPUT_DIR, f"{os.path.splitext(os.path.basename(image_path))[0]}_negative_{idx + 1}.jpg"
+            )
+            cv2.imwrite(output_path, cropped)
+            print(f"Saved: {output_path}")
+
+        cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
-    # Process all .jpg files in the INPUT_DIR
     for filename in os.listdir(INPUT_DIR):
         if filename.lower().endswith(".jpg"):
             process_image(os.path.join(INPUT_DIR, filename))
 
-    print("Processing complete. Check the output directory.")
+    print("Processing complete.")
