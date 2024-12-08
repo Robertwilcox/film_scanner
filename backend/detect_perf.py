@@ -27,8 +27,8 @@ PARAMS = {
     "aspect_ratio_range": (.5, 3.0),  # Aspect ratio range for rectangles
     "rect_size_range": (20, 600),      # Min and max width/height for rectangles (pixels)
     "shrink_factor": 0.3,              # Percentage to shrink rectangles for brightness validation
-    "max_std_dev": 2,                  # Maximum standard deviation inside the subset box
-    "brightness_threshold_factor": 0.95,  # Brightness factor for validation relative to average
+    "max_std_dev": 5,                  # Maximum standard deviation inside the subset box
+    "brightness_threshold_factor": 0.8,  # Brightness factor for validation relative to max
 }
 
 def write_debug_log(message):
@@ -50,8 +50,9 @@ def resize_to_fit_window(image, window_width, window_height):
 
 def validate_perforation_brightness(image, rectangles, params):
     """Validates detected rectangles as perforations based on brightness using subset boxes."""
-    avg_brightness = np.mean(image)
-    write_debug_log(f"STEP: Average Brightness: {avg_brightness:.2f}")
+    max_brightness = np.max(image)  # Find the maximum brightness in the image
+    brightness_threshold = max_brightness * params["brightness_threshold_factor"]
+    write_debug_log(f"STEP: Max Brightness: {max_brightness:.2f}, Brightness Threshold: {brightness_threshold:.2f}")
 
     validated_rectangles = []
     rejected_by_brightness = 0
@@ -72,10 +73,16 @@ def validate_perforation_brightness(image, rectangles, params):
         subset_brightness = np.mean(subset)
         subset_std_dev = np.std(subset)
 
-        if subset_brightness < avg_brightness * params["brightness_threshold_factor"]:
+        if subset_brightness < brightness_threshold:
             rejected_by_brightness += 1
+            write_debug_log(
+                f"Rejected rectangle: Brightness={subset_brightness:.2f} < Threshold={brightness_threshold:.2f}"
+            )
         elif subset_std_dev > params["max_std_dev"]:
             rejected_by_std_dev += 1
+            write_debug_log(
+                f"Rejected rectangle: StdDev={subset_std_dev:.2f} > MaxStdDev={params['max_std_dev']:.2f}"
+            )
         else:
             validated_rectangles.append(box)
 
@@ -87,6 +94,7 @@ def validate_perforation_brightness(image, rectangles, params):
         f" - Rejected by standard deviation: {rejected_by_std_dev}"
     )
     return validated_rectangles
+
 
 def detect_perforations(image, params, debug=False):
     """Detect perforations in the film image based on contours and aspect ratio."""
@@ -181,6 +189,103 @@ def detect_perforations(image, params, debug=False):
     return rectangles
 
 
+def calculate_iou(box1, box2):
+    """Calculate the Intersection over Union (IoU) of two rectangles."""
+    x1 = max(box1[:, 0].min(), box2[:, 0].min())
+    y1 = max(box1[:, 1].min(), box2[:, 1].min())
+    x2 = min(box1[:, 0].max(), box2[:, 0].max())
+    y2 = min(box1[:, 1].max(), box2[:, 1].max())
+
+    # Compute intersection area
+    inter_width = max(0, x2 - x1)
+    inter_height = max(0, y2 - y1)
+    inter_area = inter_width * inter_height
+
+    # Compute areas of each rectangle
+    box1_area = (box1[:, 0].max() - box1[:, 0].min()) * (box1[:, 1].max() - box1[:, 1].min())
+    box2_area = (box2[:, 0].max() - box2[:, 0].min()) * (box2[:, 1].max() - box2[:, 1].min())
+
+    # Compute IoU
+    union_area = box1_area + box2_area - inter_area
+    if union_area == 0:
+        return 0
+    return inter_area / union_area
+
+
+def filter_overlapping_rectangles(rectangles, iou_threshold=0.5):
+    """Filter out rectangles with high overlap using IoU."""
+    filtered = []
+    for i, box in enumerate(rectangles):
+        overlap = False
+        for existing_box in filtered:
+            if calculate_iou(box, existing_box) > iou_threshold:
+                overlap = True
+                break
+        if not overlap:
+            filtered.append(box)
+    return filtered
+
+
+def calculate_average_dimensions(rectangles, std_threshold=2.0):
+    """
+    Calculates the average dimensions (width, height, aspect ratio, area) of perforations,
+    accounting for rotation and skew, and filtering out outliers.
+
+    Args:
+        rectangles (list): List of rectangle points (4 points per rectangle).
+        std_threshold (float): Threshold for filtering outliers based on standard deviations.
+
+    Returns:
+        dict: A dictionary with average dimensions and standard deviations.
+    """
+    dimensions = []
+    for box in rectangles:
+        # Calculate the rotated bounding box
+        rot_rect = cv2.minAreaRect(box)
+        width, height = rot_rect[1]  # Get the width and height of the rotated rectangle
+
+        # Ensure width is the smaller dimension
+        width, height = sorted((width, height))
+        aspect_ratio = width / height
+        area = width * height
+
+        dimensions.append((width, height, aspect_ratio, area))
+
+    dimensions = np.array(dimensions)
+    if len(dimensions) == 0:
+        return None  # No rectangles to process
+
+    # Calculate means and standard deviations
+    mean_dims = np.mean(dimensions, axis=0)
+    std_dims = np.std(dimensions, axis=0)
+
+    # Filter out outliers
+    filtered_dims = [
+        dim for dim in dimensions
+        if np.all(np.abs(dim - mean_dims) <= std_threshold * std_dims)
+    ]
+
+    if len(filtered_dims) == 0:
+        return None  # No valid rectangles after filtering
+
+    # Recalculate averages and std deviations after filtering
+    filtered_dims = np.array(filtered_dims)
+    avg_dims = np.mean(filtered_dims, axis=0)
+    std_filtered_dims = np.std(filtered_dims, axis=0)
+
+    return {
+        "average_width": avg_dims[0],
+        "std_width": std_filtered_dims[0],
+        "average_height": avg_dims[1],
+        "std_height": std_filtered_dims[1],
+        "average_aspect_ratio": avg_dims[2],
+        "std_aspect_ratio": std_filtered_dims[2],
+        "average_area": avg_dims[3],
+        "std_area": std_filtered_dims[3],
+        "valid_perforations": len(filtered_dims)
+    }
+
+
 if __name__ == "__main__":
     for filename in os.listdir(INPUT_DIR):
         if filename.lower().endswith(".jpg"):
@@ -198,18 +303,41 @@ if __name__ == "__main__":
                 cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), perforations, PARAMS
             )
 
+            # Filter overlapping rectangles
+            non_overlapping_perforations = filter_overlapping_rectangles(validated_perforations, iou_threshold=0.5)
+
+            # Calculate average dimensions and filter outliers
+            avg_dims = calculate_average_dimensions(non_overlapping_perforations, std_threshold=2.0)
+
             # Visualize results
             debug_image, scale = resize_to_fit_window(image, 800, 600)
-            for box in validated_perforations:
+            for box in non_overlapping_perforations:
                 scaled_box = (box * scale).astype(int)
                 cv2.drawContours(debug_image, [scaled_box], -1, (0, 255, 0), 2)
             cv2.imshow("Detected Perforations", debug_image)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
 
-            write_summary_log(f"Final Results:\n"
-                              f" - Total validated perforations: {len(validated_perforations)}")
-            print(f"Detected perforations: {validated_perforations}")
+            # Log and print results
+            if avg_dims:
+                write_summary_log(f"Final Results:\n"
+                                  f" - Total validated perforations: {len(validated_perforations)}\n"
+                                  f" - Non-overlapping perforations: {len(non_overlapping_perforations)}\n"
+                                  f" - Valid perforations for calculations: {avg_dims['valid_perforations']}\n"
+                                  f" - Average Width: {avg_dims['average_width']:.2f} ± {avg_dims['std_width']:.2f}\n"
+                                  f" - Average Height: {avg_dims['average_height']:.2f} ± {avg_dims['std_height']:.2f}\n"
+                                  f" - Average Aspect Ratio: {avg_dims['average_aspect_ratio']:.2f} ± {avg_dims['std_aspect_ratio']:.2f}\n"
+                                  f" - Average Area: {avg_dims['average_area']:.2f} ± {avg_dims['std_area']:.2f}")
+                print("Average Perforation Dimensions (with Standard Deviations):")
+                print(f"  Average Width: {avg_dims['average_width']:.2f} ± {avg_dims['std_width']:.2f}")
+                print(f"  Average Height: {avg_dims['average_height']:.2f} ± {avg_dims['std_height']:.2f}")
+                print(f"  Average Aspect Ratio: {avg_dims['average_aspect_ratio']:.2f} ± {avg_dims['std_aspect_ratio']:.2f}")
+                print(f"  Average Area: {avg_dims['average_area']:.2f} ± {avg_dims['std_area']:.2f}")
+                print(f"  Number of Perforations Used: {avg_dims['valid_perforations']}")
+            else:
+                write_summary_log("No valid perforations found after filtering outliers.")
+                print("No valid perforations found after filtering outliers.")
 
     print("Processing complete. Check the output and summary logs.")
     write_summary_log("Processing complete.")
+
