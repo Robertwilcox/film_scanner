@@ -6,8 +6,8 @@ from bbox_detection import auto_detect_bboxes_with_perforations
 from perf_wrapper import get_perforation_statistics
 from subprocess import run
 
-INPUT_DIR = "tst_jpgs"  # Directory containing test images
-OUTPUT_DIR = "output"   # Directory to save extracted negatives
+INPUT_DIR = "jpg1"  # Directory containing test images
+OUTPUT_DIR = "out1"   # Directory to save extracted negatives
 
 # Ensure output directory exists
 if not os.path.exists(OUTPUT_DIR):
