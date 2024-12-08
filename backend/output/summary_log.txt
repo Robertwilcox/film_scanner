@@ -1,20 +1,20 @@
 
-Processing file: tst_jpgs\PXL_20241126_035248141.jpg
+Processing file: tst_jpgs\PXL_20241126_035604098.jpg
 Detection Summary:
- - Total contours: 43011
- - Candidate rectangles: 402
- - Contours rejected by area or aspect ratio: 42609
+ - Total contours: 35578
+ - Candidate rectangles: 112
+ - Contours rejected by area or aspect ratio: 35466
 Brightness Validation:
- - Total rectangles analyzed: 402
- - Validated rectangles: 130
- - Rejected by brightness: 272
+ - Total rectangles analyzed: 112
+ - Validated rectangles: 32
+ - Rejected by brightness: 80
  - Rejected by standard deviation: 0
 Final Results:
- - Total validated perforations: 130
- - Non-overlapping perforations: 129
- - Valid perforations for calculations: 118
- - Average Width: 52.03 ± 3.05
- - Average Height: 73.07 ± 1.92
- - Average Aspect Ratio: 0.71 ± 0.03
- - Average Area: 3806.09 ± 306.58
+ - Total validated perforations: 32
+ - Non-overlapping perforations: 21
+ - Valid perforations for calculations: 20
+ - Average Width: 144.86 ± 10.47
+ - Average Height: 210.57 ± 11.90
+ - Average Aspect Ratio: 0.69 ± 0.02
+ - Average Area: 30617.86 ± 3837.84
 Processing complete.
