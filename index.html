@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>35mm Film Scanner</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+    <!-- Main Folder View -->
+    <div id="folder-view">
+        <h1>35mm Film Scanner</h1>
+        <ul id="folder-list"></ul>
+        <button id="scan-btn">Select/Create Folder</button>
+        <button id="delete-all-btn" style="background-color: red; color: white;">Delete All Files</button>
+    </div>
+
+    <!-- Folder Contents View -->
+    <div id="folder-contents-view" style="display: none;">
+        <h2 id="current-folder-name"></h2>
+        <div id="folder-images"></div>
+        <button id="start-scan-btn">Start Scanning</button>
+        <button id="upload-image-btn">Upload Image</button>
+        <input type="file" id="image-upload-input" accept="image/*" style="display: none;">
+        <button id="process-btn">Process</button> <!-- Process Button -->
+        <button id="download-all-btn">Download All</button>
+        <button id="back-to-menu-btn-contents">Back to Main Menu</button>
+
+    </div>
+
+    <!-- Scanning View -->
+    <div id="scanning-view" style="display: none;">
+        <video id="camera" autoplay></video>
+        <canvas id="canvas" style="display: none;"></canvas>
+        <button id="capture-btn"></button>
+        <button id="back-to-menu-btn-scan">
+            <img src="icons/home_icon.png" alt="Home">
+        </button>
+    </div>
+
+    <!-- Image Modal -->
+    <div id="image-modal" style="display: none;">
+        <img id="modal-image" alt="Captured Image">
+        <button id="close-modal">X</button>
+    </div>
+    
+
+    <script src="js/script.js"></script>
+</body>
+</html>
