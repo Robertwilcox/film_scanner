@@ -1,0 +1,89 @@
+
+Processing file: tst_jpgs\PXL_20241126_035227352.jpg
+Detection Summary:
+ - Total contours: 32476
+ - Candidate rectangles: 766
+ - Contours rejected by area or aspect ratio: 31710
+Brightness Validation:
+ - Total rectangles analyzed: 766
+ - Validated rectangles: 224
+ - Rejected by brightness: 225
+ - Rejected by standard deviation: 317
+Final Results:
+ - Total validated perforations: 224
+
+Processing file: tst_jpgs\PXL_20241126_035230492.jpg
+Detection Summary:
+ - Total contours: 32039
+ - Candidate rectangles: 808
+ - Contours rejected by area or aspect ratio: 31231
+Brightness Validation:
+ - Total rectangles analyzed: 808
+ - Validated rectangles: 307
+ - Rejected by brightness: 224
+ - Rejected by standard deviation: 277
+Final Results:
+ - Total validated perforations: 307
+
+Processing file: tst_jpgs\PXL_20241126_035236520.jpg
+Detection Summary:
+ - Total contours: 34977
+ - Candidate rectangles: 452
+ - Contours rejected by area or aspect ratio: 34525
+Brightness Validation:
+ - Total rectangles analyzed: 452
+ - Validated rectangles: 164
+ - Rejected by brightness: 144
+ - Rejected by standard deviation: 144
+Final Results:
+ - Total validated perforations: 164
+
+Processing file: tst_jpgs\PXL_20241126_035239900.jpg
+Detection Summary:
+ - Total contours: 36918
+ - Candidate rectangles: 516
+ - Contours rejected by area or aspect ratio: 36402
+Brightness Validation:
+ - Total rectangles analyzed: 516
+ - Validated rectangles: 193
+ - Rejected by brightness: 190
+ - Rejected by standard deviation: 133
+Final Results:
+ - Total validated perforations: 193
+
+Processing file: tst_jpgs\PXL_20241126_035243048.jpg
+Detection Summary:
+ - Total contours: 35365
+ - Candidate rectangles: 512
+ - Contours rejected by area or aspect ratio: 34853
+Brightness Validation:
+ - Total rectangles analyzed: 512
+ - Validated rectangles: 207
+ - Rejected by brightness: 178
+ - Rejected by standard deviation: 127
+Final Results:
+ - Total validated perforations: 207
+
+Processing file: tst_jpgs\PXL_20241126_035248141.jpg
+Detection Summary:
+ - Total contours: 43011
+ - Candidate rectangles: 402
+ - Contours rejected by area or aspect ratio: 42609
+Brightness Validation:
+ - Total rectangles analyzed: 402
+ - Validated rectangles: 111
+ - Rejected by brightness: 271
+ - Rejected by standard deviation: 20
+Final Results:
+ - Total validated perforations: 111
+
+Processing file: tst_jpgs\PXL_20241126_035533085.jpg
+Detection Summary:
+ - Total contours: 34568
+ - Candidate rectangles: 198
+ - Contours rejected by area or aspect ratio: 34370
+Brightness Validation:
+ - Total rectangles analyzed: 198
+ - Validated rectangles: 67
+ - Rejected by brightness: 88
+ - Rejected by standard deviation: 43
