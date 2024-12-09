@@ -1,17 +1,35 @@
+'''
+Perforation Statistics Wrapper
+
+This module provides a function to extract perforation 
+statistics from images by running the `detect_perf.py` 
+script and parsing its output.
+
+Author: Robert Wilcox
+Email: robertraywilcox@gmail.com
+Date: December 9, 2024
+'''
+
 import subprocess
 import json
 import os
 import re
 
+
 def get_perforation_statistics(image_path):
     """
-    Runs detect_perf.py on the given image and extracts perforation statistics.
+    Runs detect_perf.py on the given image and extracts 
+    perforation statistics.
 
     Args:
-        image_path (str): Path to the image file to process.
+        image_path (str): Path to the image file.
 
     Returns:
         dict: A dictionary containing perforation statistics.
+
+    Raises:
+        RuntimeError: If there is an error running detect_perf.py 
+                     or parsing the output.
     """
     try:
         # Run detect_perf.py as a subprocess
@@ -22,7 +40,7 @@ def get_perforation_statistics(image_path):
             text=True,
             check=True
         )
-        
+
         # Debug: Print raw output from detect_perf.py
         print("Raw output from detect_perf.py:")
         print(result.stdout)
@@ -44,14 +62,17 @@ def get_perforation_statistics(image_path):
             for key, pattern in patterns.items():
                 match = re.search(pattern, line)
                 if match:
-                    if "±" in pattern:  # Handle keys with both value and std deviation
+                    if "±" in pattern:  # Handle keys with value and std dev
                         stats[key] = float(match.group(1))
                         if key == "average_aspect_ratio":
                             stats["std_aspect_ratio"] = float(match.group(2))
                         else:
                             stats[f"std_{key.split('_')[1]}"] = float(match.group(2))
                     else:  # Handle keys with single value
-                        stats[key] = int(match.group(1)) if key == "valid_perforations" else float(match.group(1))
+                        if key == "valid_perforations":
+                            stats[key] = int(match.group(1)) 
+                        else:
+                            stats[key] = float(match.group(1))
 
         # Debug: Print parsed statistics
         print("Parsed Statistics:")
@@ -75,6 +96,7 @@ def get_perforation_statistics(image_path):
         print("Error output from detect_perf.py:")
         print(e.stderr)
         raise RuntimeError(f"Error running detect_perf.py: {e.stderr}")
+
 
 # Example usage
 if __name__ == "__main__":

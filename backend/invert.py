@@ -1,6 +1,19 @@
+'''
+Image Inversion Utility
+
+This script inverts the colors of images in a specified 
+input directory and saves the inverted images to an 
+output directory.
+
+Author: Robert Wilcox
+Email: robertraywilcox@gmail.com
+Date: December 9, 2024
+'''
+
 import cv2
 import os
 import sys
+
 
 def invert_image(input_path, output_path):
     """
@@ -22,6 +35,7 @@ def invert_image(input_path, output_path):
     # Save the inverted image
     cv2.imwrite(output_path, inverted_image)
     print(f"Inverted image saved to: {output_path}")
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:

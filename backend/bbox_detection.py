@@ -1,3 +1,16 @@
+'''
+Bounding Box Detection Utilities
+
+This module provides functions for detecting and refining 
+bounding boxes in images, particularly for film negatives, 
+using edge detection, contour analysis, and perforation 
+statistics.
+
+Author: Robert Wilcox
+Email: robertraywilcox@gmail.com
+Date: December 9, 2024
+'''
+
 import cv2
 import os
 import numpy as np
@@ -11,31 +24,32 @@ if not os.path.exists(DEBUG_DIR):
 
 # Parameters for edge detection and contour filtering
 EDGE_DETECTION_PARAMS = {
-    "blur_kernel": (5, 5),  # Gaussian blur kernel size
-    "canny_threshold1": 10,  # Lower threshold for Canny edge detection (aggressive detection)
-    "canny_threshold2": 50,  # Upper threshold for Canny edge detection (aggressive detection)
-    "sobel_kernel": 3,  # Sobel operator kernel size
+    "blur_kernel": (5, 5),      # Gaussian blur kernel size
+    "canny_threshold1": 10,    # Lower threshold for Canny edge detection
+    "canny_threshold2": 50,    # Upper threshold for Canny edge detection
+    "sobel_kernel": 3,         # Sobel operator kernel size
 }
 MORPHOLOGY_PARAMS = {
-    "kernel_size": (7, 7),  # Morphological kernel size
-    "dilation_iterations": 3,  # Dilation iterations for better edge connection
+    "kernel_size": (7, 7),      # Morphological kernel size
+    "dilation_iterations": 3,  # Dilation iterations for edge connection
 }
 CONTOUR_FILTER_PARAMS = {
-    "min_contour_area": 10,  # Very small contour area to allow maximum detection
+    "min_contour_area": 10,    # Minimum contour area for detection
 }
 NEGATIVE_BOX_PARAMS = {
-    "width_multiplier": 9,  # Multiplier for width based on perforation stats
-    "height_multiplier": 9,  # Multiplier for height based on perforation stats
-    "width_tolerance": 0.7,  # ±30% tolerance for width
-    "height_tolerance": 0.7,  # ±30% tolerance for height
-    "min_aspect_ratio": 1.0,  # Minimum aspect ratio
-    "max_aspect_ratio": 2.2,  # Maximum aspect ratio
+    "width_multiplier": 9,     # Multiplier for width based on perf stats
+    "height_multiplier": 9,    # Multiplier for height based on perf stats
+    "width_tolerance": 0.7,    # Tolerance for width
+    "height_tolerance": 0.7,    # Tolerance for height
+    "min_aspect_ratio": 1.0,    # Minimum aspect ratio
+    "max_aspect_ratio": 2.2,    # Maximum aspect ratio
 }
 
 
 def detect_initial_boxes(image):
     """
-    Detect initial bounding boxes using aggressive edge detection and contour techniques.
+    Detect initial bounding boxes using aggressive edge detection 
+    and contour techniques.
 
     Args:
         image (numpy.ndarray): Input image.
@@ -50,12 +64,16 @@ def detect_initial_boxes(image):
     blurred = cv2.GaussianBlur(gray, EDGE_DETECTION_PARAMS["blur_kernel"], 0)
 
     # Sobel gradient (horizontal and vertical) for edge detection
-    sobel_x = cv2.Sobel(blurred, cv2.CV_64F, 1, 0, ksize=EDGE_DETECTION_PARAMS["sobel_kernel"])
-    sobel_y = cv2.Sobel(blurred, cv2.CV_64F, 0, 1, ksize=EDGE_DETECTION_PARAMS["sobel_kernel"])
+    sobel_x = cv2.Sobel(
+        blurred, cv2.CV_64F, 1, 0, ksize=EDGE_DETECTION_PARAMS["sobel_kernel"]
+    )
+    sobel_y = cv2.Sobel(
+        blurred, cv2.CV_64F, 0, 1, ksize=EDGE_DETECTION_PARAMS["sobel_kernel"]
+    )
     sobel_combined = cv2.convertScaleAbs(cv2.addWeighted(sobel_x, 1.0, sobel_y, 1.0, 0))
     cv2.imwrite(os.path.join(DEBUG_DIR, "debug_sobel_combined.jpg"), sobel_combined)
 
-    # Use very aggressive Canny edge detection
+    # Use aggressive Canny edge detection
     canny_edges = cv2.Canny(
         sobel_combined,
         EDGE_DETECTION_PARAMS["canny_threshold1"],
@@ -65,7 +83,9 @@ def detect_initial_boxes(image):
 
     # Dilate edges to strengthen connectivity
     dilation_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
-    dilated_edges = cv2.dilate(canny_edges, dilation_kernel, iterations=MORPHOLOGY_PARAMS["dilation_iterations"])
+    dilated_edges = cv2.dilate(
+        canny_edges, dilation_kernel, iterations=MORPHOLOGY_PARAMS["dilation_iterations"]
+    )
     cv2.imwrite(os.path.join(DEBUG_DIR, "debug_dilated_edges.jpg"), dilated_edges)
 
     # Find contours from the dilated edges
@@ -96,9 +116,9 @@ def filter_boxes_with_perforation_data(bboxes, perf_stats, image_shape):
     Filters bounding boxes using perforation data to refine the selection.
 
     Args:
-        bboxes (list): List of bounding boxes as (x, y, width, height) tuples.
+        bboxes (list): List of bounding boxes.
         perf_stats (dict): Perforation statistics.
-        image_shape (tuple): Shape of the image (height, width, channels).
+        image_shape (tuple): Shape of the image.
 
     Returns:
         list: Refined bounding boxes.
@@ -118,7 +138,10 @@ def filter_boxes_with_perforation_data(bboxes, perf_stats, image_shape):
     expected_height = perf_stats["average_height"] * height_multiplier
 
     # Print expected dimensions
-    print(f"Expected bounding box size: Width: {expected_width:.2f}, Height: {expected_height:.2f}")
+    print(
+        f"Expected bounding box size: Width: {expected_width:.2f}, "
+        f"Height: {expected_height:.2f}"
+    )
 
     # Calculate tolerance ranges
     width_range = (
@@ -133,7 +156,7 @@ def filter_boxes_with_perforation_data(bboxes, perf_stats, image_shape):
 
     for box in bboxes:
         try:
-            x, y, w, h = box
+            x, y, w, h = cv2.boundingRect(np.array(box))  # Get bounding rect
             if w <= 0 or h <= 0:
                 continue
 
@@ -148,10 +171,14 @@ def filter_boxes_with_perforation_data(bboxes, perf_stats, image_shape):
                 <= aspect_ratio
                 <= NEGATIVE_BOX_PARAMS["max_aspect_ratio"]
             ):
-                refined_bboxes.append(box)
+                refined_bboxes.append(box)  # Append the original box
+                # Draw the refined box on the debug image
+                cv2.drawContours(debug_image, [np.intp(box)], -1, (0, 255, 0), 2)
         except Exception as e:
             print(f"Error processing box {box}: {e}")
 
+    print(f"Refined bounding boxes: {len(refined_bboxes)}")
+    cv2.imwrite(os.path.join(DEBUG_DIR, "debug_refined_boxes.jpg"), debug_image)
     return refined_bboxes
 
 
@@ -167,5 +194,7 @@ def auto_detect_bboxes_with_perforations(image, perf_stats):
         list: Final bounding boxes.
     """
     initial_boxes = detect_initial_boxes(image)
-    refined_boxes = filter_boxes_with_perforation_data(initial_boxes, perf_stats, image.shape)
+    refined_boxes = filter_boxes_with_perforation_data(
+        initial_boxes, perf_stats, image.shape
+    )
     return refined_boxes
